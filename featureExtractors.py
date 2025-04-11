@@ -110,7 +110,7 @@ class SimpleExtractor(FeatureExtractor):
             features["closest-food"] = float(dist) / (walls.width * walls.height)
         features.divideAll(10.0)
         return features
-  
+
 class CustomExtractor(FeatureExtractor):
     """
     Write your own Custom Feature Extractor
@@ -138,9 +138,21 @@ class CustomExtractor(FeatureExtractor):
         x, y = state.getPacmanPosition()
         dx, dy = Actions.directionToVector(action)
         next_x, next_y = int(x + dx), int(y + dy)
-
+  
         # count the number of ghosts 1-step away
         features["#-of-ghosts-1-step-away"] = sum((next_x, next_y) in Actions.getLegalNeighbors(g, walls) for g in ghosts)
+        
+        # count the number of ghosts 2-steps away if no ghosts one step away
+        if features["#-of-ghosts-1-step-away"] == 0:
+            for g in ghosts:
+                one_step_ghost = Actions.getLegalNeighbors(g, walls)
+                two_step_ghost = set()
+                for pos in one_step_ghost:
+                    two_step_ghost.update(Actions.getLegalNeighbors(pos, walls))
+                if (next_x, next_y) in two_step_ghost:
+                    features["#-of-ghosts-2-steps-away"] += 1
+        else:
+            features["#-of-ghosts-2-steps-away"] = 0.0
 
         # if there is no danger of ghosts then add the food feature
         if not features["#-of-ghosts-1-step-away"] and food[next_x][next_y]:
@@ -155,13 +167,17 @@ class CustomExtractor(FeatureExtractor):
         # Scared ghost features
         if scaredGhosts:
             best_incentive = 0.0
+            min_scared_time = 2
 
             for g_pos, timer in zip(scaredGhosts, scaredTimes):
+                if timer < min_scared_time:
+                    continue
+                
                 gx, gy = g_pos
                 dist = abs(next_x - gx) + abs(next_y - gy)
                 
-                if (abs(next_x - gx) + abs(next_y - gy)) <= 1.0:  # Directly adjacent
-                    features["edible-now"] = 1.0
+                if (abs(next_x - gx) + abs(next_y - gy)) <= 1:  # Directly adjacent
+                    features["edible-now"] += 1.0
                 
                 incentive = 0
                 if timer > dist * 2:
@@ -175,5 +191,10 @@ class CustomExtractor(FeatureExtractor):
             features["edible-now"] = 0.0
     
         features.divideAll(10.0)
-        features["scared-incentive"] *= 2.0
+        features["#-of-ghosts-1-step-away"] *= 1.0
+        features["#-of-ghosts-2-steps-away"] *= 0.5
+        features["eats-food"] *= 1.5
+        features["closest-food"] *= 1.0
+        features["edible-now"] *= 1.0
+        features["scared-incentive"] *= 1.0
         return features
